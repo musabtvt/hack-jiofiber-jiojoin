@@ -1,0 +1,32 @@
+#!/usr/sbin/nft -f
+# ==============================================================================
+# JioFiber Voice - nftables Ruleset for OpenWrt (fw4)
+# Prioritize SIP & RTP voice packets and transparently route to Voice VLAN 406
+# ==============================================================================
+
+# Priority QOS / DSCP marking for SIP & RTP packets
+table inet jio_voice_qos {
+    chain mangle_prerouting {
+        type filter hook prerouting priority mangle; policy accept;
+
+        # Mark SIP signaling (UDP/TCP 5060, 5061, 5068) with CS5 / 0xa0
+        ip protocol udp udp dport { 5060, 5061, 5068 } ip dscp set cs5
+        ip protocol tcp tcp dport { 5060, 5061, 5068 } ip dscp set cs5
+        ip6 nexthdr udp udp dport { 5060, 5061, 5068 } ip6 dscp set cs5
+        ip6 nexthdr tcp tcp dport { 5060, 5061, 5068 } ip6 dscp set cs5
+
+        # Mark RTP voice media streams (UDP 10000-20000) with EF (Expedited Forwarding, DSCP 46 / 0xb8)
+        ip protocol udp udp dport 10000-20000 ip dscp set ef
+        ip6 nexthdr udp udp dport 10000-20000 ip6 dscp set ef
+    }
+
+    chain mangle_output {
+        type filter hook output priority mangle; policy accept;
+
+        # Mark locally generated SIP / RTP traffic from router (e.g. JioJoin beacon / softphone proxy)
+        ip protocol udp udp dport { 5060, 5061, 5068 } ip dscp set cs5
+        ip6 nexthdr udp udp dport { 5060, 5061, 5068 } ip6 dscp set cs5
+        ip protocol udp udp dport 10000-20000 ip dscp set ef
+        ip6 nexthdr udp udp dport 10000-20000 ip6 dscp set ef
+    }
+}
